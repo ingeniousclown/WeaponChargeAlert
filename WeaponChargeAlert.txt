@@ -1,0 +1,7 @@
+## Title: Weapon Charge Alert
+## Author: ingeniousclown
+## Version: 0.2.3
+## APIVersion: 100003
+## SavedVariables: WeaponChargeAlert_Settings
+
+WeaponChargeAlert.lua
