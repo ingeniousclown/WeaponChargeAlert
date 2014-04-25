@@ -1,7 +1,7 @@
 ------------------------------------------------------------------
 --WeaponChargeAlert.lua
 --Author: ingeniousclown
---v0.2.3
+--v0.3.0
 --[[
 A mod that pops up a little alert window when you're low on weapon
 charge for your main and off-hand weapons.
@@ -44,6 +44,8 @@ local defaults = {
 	windowPadding = 10,
 
 	locked = true,
+	alpha = 0.9,
+	scale = 1
 }
 
 ---------------------------------------------------------------
@@ -146,7 +148,6 @@ local function SetWeaponSlot(control, slotId)
 	end
 
 	local icon, _, _, _, _, equipType, _, _ = GetItemInfo(BAG_WORN, slotId)
-	local texture, weaponTexture = GetSlotTexture(BAG_WORN, slotId)	--what is this?!
 	local charges, maxCharges = GetChargeInfoForItem(BAG_WORN, slotId)
 
 	control:GetNamedChild("_Icon"):SetTexture(icon)
@@ -155,6 +156,16 @@ local function SetWeaponSlot(control, slotId)
 	control.slotId = slotId
 
 	UpdateAllAlerts()
+end
+
+local function ApplyWeaponSet(activeWeaponPair)
+	if(activeWeaponPair == 1) then
+		SetWeaponSlot(MAIN_WEAPON, EQUIP_SLOT_MAIN_HAND)
+		SetWeaponSlot(OFF_WEAPON, EQUIP_SLOT_OFF_HAND)
+	else
+		SetWeaponSlot(MAIN_WEAPON, EQUIP_SLOT_BACKUP_MAIN)
+		SetWeaponSlot(OFF_WEAPON, EQUIP_SLOT_BACKUP_OFF)
+	end
 end
 
 
@@ -180,16 +191,26 @@ local function CombatStateChanged(eventCode, inCombat)
 	end
 end
 
+local function WeaponSetChanged(eventCode, activeWeaponPair, locked)
+	ApplyWeaponSet(activeWeaponPair)
+end
+
 local function WeaponChanged(eventCode, bagId, slotId, isNewItem, itemSoundCategory, updateReason)
 	-- d("slotId = " .. slotId)
 	if(bagId ~= BAG_WORN) then return end
 
-	if(slotId == EQUIP_SLOT_MAIN_HAND) then
-		SetWeaponSlot(MAIN_WEAPON, slotId)
-	-- elseif(slotId == EQUIP_SLOT_RANGED) then
-	-- 	SetWeaponSlot(MAIN_WEAPON, slotId)
-	elseif(slotId == EQUIP_SLOT_OFF_HAND) then
-		SetWeaponSlot(OFF_WEAPON, slotId)
+	if(GetActiveWeaponPairInfo() == 1) then
+		if(slotId == EQUIP_SLOT_MAIN_HAND) then
+			SetWeaponSlot(MAIN_WEAPON, slotId)
+		elseif(slotId == EQUIP_SLOT_OFF_HAND) then
+			SetWeaponSlot(OFF_WEAPON, slotId)
+		end
+	else
+		if(slotId == EQUIP_SLOT_BACKUP_MAIN) then
+			SetWeaponSlot(MAIN_WEAPON, slotId)
+		elseif(slotId == EQUIP_SLOT_BACKUP_OFF) then
+			SetWeaponSlot(OFF_WEAPON, slotId)
+		end
 	end
 end
 
@@ -219,6 +240,8 @@ local function OnLoad(eventCode, addOnName)
 		:SetMouseEnabled(true)
 		:SetMovable(settings.locked)
 		:SetHidden(false)
+		:SetAlpha(settings.alpha)
+		:SetScale(settings.scale)
 		:SetHandler("OnMoveStop", function(self)
 			local x, y = self:GetCenter()
 			settings.offsetX = x / screenWidth
@@ -280,26 +303,56 @@ local function OnLoad(eventCode, addOnName)
 	MAIN_WEAPON.shouldShow = false
 	OFF_WEAPON.shouldShow = false
 
-	SetWeaponSlot(MAIN_WEAPON, EQUIP_SLOT_MAIN_HAND)
-	SetWeaponSlot(OFF_WEAPON, EQUIP_SLOT_OFF_HAND)
+	ApplyWeaponSet(GetActiveWeaponPairInfo())
 
 	-- FADE_ANIMATION, FADE_TIMELINE = CreateSimpleAnimation(ANIMATION_ALPHA, MAIN_WINDOW)
 	UpdateAllAlerts()
+	ToggleLock(settings.locked)
 
-	--i'm assuming this works the way i think it does
-	SLASH_COMMANDS["/weaponchargealert"] = function(arg)
-		local mainArg = arg
-		if(zo_strlower(mainArg) == "lock") then
+	SLASH_COMMANDS["/weaponchargealert"] = function(input)
+		local args = { string.match(input, "^(%S*)%s*(.-)$") }
+		if(#args[1] == 0 or args[1] == "help") then
+			d('"/weaponchargealert" or "/wca"')
+			d("lock - locks position and hides the window")
+			d("unlock - unlocks position and shows the window")
+			d("opacity # - sets alpha value for the window (value 0 to 1)")
+			d("alpha # - same as opacity")
+			d("scale # - changes the window size (1 for default)")
+			d("default - reset your settings to DEFAULT - be careful!")
+			d('example: "/weaponchargealert alpha 0.75" will set the window to 75% opacity')
+		end
+		if(args[1] == "lock") then
 			ToggleLock(true)
 			d("locked")
-		elseif(zo_strlower(mainArg) == "unlock") then
+		elseif(args[1] == "unlock") then
 			ToggleLock(false)
 			d("unlocked")
+		elseif(args[1] == "opacity" or args[1] == "alpha") then
+			MAIN_WINDOW:SetAlpha(args[2])
+			settings.alpha = args[2]
+			d("alpha set to " .. args[2])
+		elseif(args[1] == "scale") then
+			MAIN_WINDOW:SetScale(args[2])
+			settings.scale = args[2]
+			d("scale set to " .. args[2])
+		elseif(args[1] == "default") then
+			MAIN_WINDOW:SetAlpha(defaults.alpha)
+			MAIN_WINDOW:SetScale(defaults.scale)
+			MAIN_WINDOW:ClearAnchors()
+			MAIN_WINDOW:SetAnchor(CENTER, GuiRoot, TOPLEFT, screenWidth * defaults.offsetX, screenHeight * defaults.offsetY)
+			settings.alpha = defaults.alpha
+			settings.scale = defaults.scale
+			settings.offsetX = defaults.offsetX
+			settings.offsetY = defaults.offsetY
+			d("reset to default!")
 		end
 	end
-	SLASH_COMMANDS["/wca"] = SLASH_COMMANDS["/weaponchargealert"]
+	if(not SLASH_COMMANDS["/wca"]) then
+		SLASH_COMMANDS["/wca"] = SLASH_COMMANDS["/weaponchargealert"]
+	end
 	EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_WpnSlotChanged", EVENT_INVENTORY_SINGLE_SLOT_UPDATE, WeaponChanged)
 	EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_CombatStateChanged", EVENT_PLAYER_COMBAT_STATE, CombatStateChanged)
+	EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_WeaponSwap", EVENT_ACTIVE_WEAPON_PAIR_CHANGED, WeaponSetChanged)
 end
 
 local function WeaponChargeAlert_Initialized(self)
@@ -309,7 +362,7 @@ end
 -- EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_Initialized", EVENT_ADD_ON_INITIALIZED, WeaponChargeAlert_Initialized)
 WeaponChargeAlert_Initialized()
 
--- function UnhideAllDur()
--- 	SetHiddenAll(MAIN_WEAPON, false)
--- 	SetHiddenAll(OFF_WEAPON, false)
--- end
+function UnhideAllDur()
+	SetHiddenAll(MAIN_WEAPON, false)
+	SetHiddenAll(OFF_WEAPON, false)
+end
