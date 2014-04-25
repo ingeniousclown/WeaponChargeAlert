@@ -1,7 +1,7 @@
 ------------------------------------------------------------------
 --WeaponChargeAlert.lua
 --Author: ingeniousclown
---v0.3.0
+--v1.0.0
 --[[
 A mod that pops up a little alert window when you're low on weapon
 charge for your main and off-hand weapons.
@@ -14,10 +14,6 @@ local MAIN_WINDOW = nil
 
 local MAIN_WEAPON = nil
 local OFF_WEAPON = nil
-
--- local FADE_TIMELINE = nil
--- local FADE_ANIMATION = nil
--- local FADE_TIME = 300
 
 local OUTLINE_TEXTURE = "WeaponChargeAlert/assets/gridItem_outline.dds"
 
@@ -87,7 +83,6 @@ end
 
 local function GetChargeThreshold(control)
 	local chargeRatio = control.charges / control.maxCharges
-	-- d("chargeRatio = " .. chargeRatio)
 
 	if(chargeRatio == 0) then
 		return Threshold.EMPTY
@@ -176,7 +171,6 @@ end
 --call charge with lowest-tier soul gem in inventory... eventually
 local function ChargeWeapon(button)
 	ZO_Dialogs_ShowDialog("CHARGE_ITEM", {bag = 0, index = button.slotId})
-	-- UpdateAllAlerts()
 end
 
 
@@ -184,7 +178,6 @@ end
 --EVENT HANDLERS
 ---------------------------------------------------------------
 
---hide in combat (maybe remove the hiding??)
 local function CombatStateChanged(eventCode, inCombat)
 	if(not inCombat) then
 		UpdateAllAlerts()
@@ -196,7 +189,6 @@ local function WeaponSetChanged(eventCode, activeWeaponPair, locked)
 end
 
 local function WeaponChanged(eventCode, bagId, slotId, isNewItem, itemSoundCategory, updateReason)
-	-- d("slotId = " .. slotId)
 	if(bagId ~= BAG_WORN) then return end
 
 	if(GetActiveWeaponPairInfo() == 1) then
@@ -305,7 +297,6 @@ local function OnLoad(eventCode, addOnName)
 
 	ApplyWeaponSet(GetActiveWeaponPairInfo())
 
-	-- FADE_ANIMATION, FADE_TIMELINE = CreateSimpleAnimation(ANIMATION_ALPHA, MAIN_WINDOW)
 	UpdateAllAlerts()
 	ToggleLock(settings.locked)
 
@@ -359,10 +350,4 @@ local function WeaponChargeAlert_Initialized(self)
 	EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_OnLoad", EVENT_ADD_ON_LOADED, OnLoad)
 end
 
--- EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_Initialized", EVENT_ADD_ON_INITIALIZED, WeaponChargeAlert_Initialized)
 WeaponChargeAlert_Initialized()
-
-function UnhideAllDur()
-	SetHiddenAll(MAIN_WEAPON, false)
-	SetHiddenAll(OFF_WEAPON, false)
-end
