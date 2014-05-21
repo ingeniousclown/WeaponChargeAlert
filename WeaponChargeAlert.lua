@@ -1,7 +1,7 @@
 ------------------------------------------------------------------
 --WeaponChargeAlert.lua
 --Author: ingeniousclown
---v1.0.0
+--v1.1.0
 --[[
 A mod that pops up a little alert window when you're low on weapon
 charge for your main and off-hand weapons.
@@ -9,7 +9,7 @@ charge for your main and off-hand weapons.
 ------------------------------------------------------------------
 
 
-local settings = nil
+WCASettings = nil
 local MAIN_WINDOW = nil
 
 local MAIN_WEAPON = nil
@@ -22,26 +22,6 @@ local Threshold = {
 	HALF = 1,
 	LOW = 2,
 	EMPTY =3
-}
-
-local defaults = {
-	offsetX = 0.625,
-	offsetY = 0.125,
-
-	halfAlert = false,
-	lowAlert = true,
-	emptyAlert = true,
-
-	lowThreshold = 0.2,
-
-	iconSize = 64,
-	iconSpacing = 10,
-
-	windowPadding = 10,
-
-	locked = true,
-	alpha = 0.9,
-	scale = 1
 }
 
 ---------------------------------------------------------------
@@ -86,9 +66,9 @@ local function GetChargeThreshold(control)
 
 	if(chargeRatio == 0) then
 		return Threshold.EMPTY
-	elseif(settings.lowAlert and settings.lowThreshold >= chargeRatio and chargeRatio > 0) then
+	elseif(WCASettings:IsLowAlert() and WCASettings:GetLowThreshold() >= chargeRatio) then
 		return Threshold.LOW
-	elseif(settings.halfAlert and 0.5 >= chargeRatio and chargeRatio > settings.lowThreshold) then
+	elseif(WCASettings:IsFirstAlert() and WCASettings:GetFirstThreshold() >= chargeRatio) then
 		return Threshold.HALF
 	else
 		return Threshold.NONE
@@ -102,18 +82,18 @@ local function SetAlert(control, threshold)
 		outline:SetColor(0, 0, 0, 0)
 		SetHiddenAll(control, true)
 		return 
-	elseif(threshold == Threshold.HALF and settings.halfAlert) then
-		outline:SetColor(1, 1, 0, 1)
+	elseif(threshold == Threshold.HALF and WCASettings:IsFirstAlert()) then
+		outline:SetColor(WCASettings:GetFirstColor())
 		SetHiddenAll(control, false)
 		control.shouldShow = true
 		return
-	elseif(threshold == Threshold.LOW and settings.lowAlert) then
-		outline:SetColor(1, .784, 0, 1)
+	elseif(threshold == Threshold.LOW and WCASettings:IsLowAlert()) then
+		outline:SetColor(WCASettings:GetLowColor())
 		SetHiddenAll(control, false)
 		control.shouldShow = true
 		return
-	elseif(threshold == Threshold.EMPTY) then
-		outline:SetColor(1, 0, 0, 1)
+	elseif(threshold == Threshold.EMPTY and WCASettings:IsEmptyAlert()) then
+		outline:SetColor(WCASettings:GetEmptyColor())
 		SetHiddenAll(control, false)
 		control.shouldShow = true
 		return
@@ -132,7 +112,11 @@ local function UpdateAllAlerts()
 	UpdateAlert(MAIN_WEAPON)
 	UpdateAlert(OFF_WEAPON)
 
-	MAIN_WINDOW:SetHidden((not (MAIN_WEAPON.shouldShow or OFF_WEAPON.shouldShow)) and settings.locked)
+	MAIN_WINDOW:SetHidden((not (MAIN_WEAPON.shouldShow or OFF_WEAPON.shouldShow)) and WCASettings:IsLocked())
+end
+
+function WeaponChargeAlert_UpdateAllAlerts()
+	UpdateAllAlerts()
 end
 
 local function SetWeaponSlot(control, slotId)
@@ -168,7 +152,6 @@ end
 --BUTTON HANDLER
 ---------------------------------------------------------------
 
---call charge with lowest-tier soul gem in inventory... eventually
 local function ChargeWeapon(button)
 	ZO_Dialogs_ShowDialog("CHARGE_ITEM", {bag = 0, index = button.slotId})
 end
@@ -207,9 +190,7 @@ local function WeaponChanged(eventCode, bagId, slotId, isNewItem, itemSoundCateg
 end
 
 local function ToggleLock(locked)
-	settings.locked = locked
-	MAIN_WINDOW:SetMovable(not locked)
-	UpdateAllAlerts()
+	WCASettings:SetLocked(locked)
 end
 
 local function OnLoad(eventCode, addOnName)
@@ -217,29 +198,33 @@ local function OnLoad(eventCode, addOnName)
         return
     end
 
-    settings = ZO_SavedVars:New("WeaponChargeAlert_Settings", 1, nil, defaults)
+    WCASettings = WeaponChargeAlertSettings:New()
 
-    local windowSizeX = settings.iconSize * 2 + settings.windowPadding * 2 + settings.iconSpacing
-    local windowSizeY = settings.iconSize + settings.windowPadding * 2
+	local iconSize = 64
+	local iconSpacing = 10
 
-    local screenWidth = GuiRoot:GetWidth()
-    local screenHeight = GuiRoot:GetHeight()
+	local windowPadding = 10
+
+    local windowSizeX = iconSize * 2 + windowPadding * 2 + iconSpacing
+    local windowSizeY = iconSize + windowPadding * 2
 
     MAIN_WINDOW = CHAIN(WINDOW_MANAGER:CreateTopLevelWindow("WeaponChargeAlert_Window"))
 		:SetDimensions(windowSizeX, windowSizeY)
-		:SetAnchor(CENTER, GuiRoot, TOPLEFT, screenWidth * settings.offsetX, screenHeight * settings.offsetY)
+		:SetAnchor(CENTER, GuiRoot, TOPLEFT, WCASettings.GetOffsetX(), WCASettings:GetOffsetY())
 		:SetClampedToScreen(true)
 		:SetMouseEnabled(true)
-		:SetMovable(settings.locked)
+		:SetMovable(WCASettings:IsLocked())
 		:SetHidden(false)
-		:SetAlpha(settings.alpha)
-		:SetScale(settings.scale)
+		:SetAlpha(WCASettings:GetAlpha())
+		:SetScale(WCASettings:GetScale())
 		:SetHandler("OnMoveStop", function(self)
 			local x, y = self:GetCenter()
-			settings.offsetX = x / screenWidth
-			settings.offsetY = y / screenHeight
+			WCASettings:SetOffsetX(x)
+			WCASettings:SetOffsetY(y)
 		end )
 	.__END
+
+	WCASettings:SetMainWindow(MAIN_WINDOW)
 
 	BD = CHAIN(WINDOW_MANAGER:CreateControl("Backdrop", MAIN_WINDOW, CT_TEXTURE))
 		:SetDimensions(windowSizeX * 1.5, windowSizeY * 1.7)
@@ -248,11 +233,11 @@ local function OnLoad(eventCode, addOnName)
 	.__END
 
 	MAIN_WEAPON = CHAIN(WINDOW_MANAGER:CreateControl("WeaponChargeAlert_Main_Weapon", MAIN_WINDOW, CT_BUTTON))
-		:SetDimensions(settings.iconSize, settings.iconSize)
-		:SetAnchor(TOPLEFT, MAIN_WINDOW, TOPLEFT, settings.windowPadding, settings.windowPadding)
+		:SetDimensions(iconSize, iconSize)
+		:SetAnchor(TOPLEFT, MAIN_WINDOW, TOPLEFT, windowPadding, windowPadding)
 		:SetHandler("OnClicked", ChargeWeapon)
 		:SetHidden(true)
-		:SetMovable(not settings.locked)
+		:SetMovable(not WCASettings:IsLocked())
 	.__END
 
 	local MAIN_OUTLINE = CHAIN(WINDOW_MANAGER:CreateControl("WeaponChargeAlert_Main_Weapon_Outline", MAIN_WEAPON, CT_TEXTURE))
@@ -271,8 +256,8 @@ local function OnLoad(eventCode, addOnName)
 	.__END
 
 	OFF_WEAPON = CHAIN(WINDOW_MANAGER:CreateControl("WeaponChargeAlert_Off_Weapon", MAIN_WINDOW, CT_BUTTON))
-		:SetDimensions(settings.iconSize, settings.iconSize)
-		:SetAnchor(TOPLEFT, MAIN_WINDOW, TOPLEFT, settings.windowPadding + settings.iconSize + settings.iconSpacing, settings.windowPadding)
+		:SetDimensions(iconSize, iconSize)
+		:SetAnchor(TOPLEFT, MAIN_WINDOW, TOPLEFT, windowPadding + iconSize + iconSpacing, windowPadding)
 		:SetHandler("OnClicked", ChargeWeapon)
 		:SetHidden(true)
 	.__END
@@ -298,44 +283,20 @@ local function OnLoad(eventCode, addOnName)
 	ApplyWeaponSet(GetActiveWeaponPairInfo())
 
 	UpdateAllAlerts()
-	ToggleLock(settings.locked)
+	ToggleLock(WCASettings:IsLocked())
 
 	SLASH_COMMANDS["/weaponchargealert"] = function(input)
 		local args = { string.match(input, "^(%S*)%s*(.-)$") }
-		if(#args[1] == 0 or args[1] == "help") then
-			d('"/weaponchargealert" or "/wca"')
-			d("lock - locks position and hides the window")
-			d("unlock - unlocks position and shows the window")
-			d("opacity # - sets alpha value for the window (value 0 to 1)")
-			d("alpha # - same as opacity")
-			d("scale # - changes the window size (1 for default)")
-			d("default - reset your settings to DEFAULT - be careful!")
-			d('example: "/weaponchargealert alpha 0.75" will set the window to 75% opacity')
-		end
 		if(args[1] == "lock") then
 			ToggleLock(true)
 			d("locked")
 		elseif(args[1] == "unlock") then
 			ToggleLock(false)
 			d("unlocked")
-		elseif(args[1] == "opacity" or args[1] == "alpha") then
-			MAIN_WINDOW:SetAlpha(args[2])
-			settings.alpha = args[2]
-			d("alpha set to " .. args[2])
-		elseif(args[1] == "scale") then
-			MAIN_WINDOW:SetScale(args[2])
-			settings.scale = args[2]
-			d("scale set to " .. args[2])
-		elseif(args[1] == "default") then
-			MAIN_WINDOW:SetAlpha(defaults.alpha)
-			MAIN_WINDOW:SetScale(defaults.scale)
-			MAIN_WINDOW:ClearAnchors()
-			MAIN_WINDOW:SetAnchor(CENTER, GuiRoot, TOPLEFT, screenWidth * defaults.offsetX, screenHeight * defaults.offsetY)
-			settings.alpha = defaults.alpha
-			settings.scale = defaults.scale
-			settings.offsetX = defaults.offsetX
-			settings.offsetY = defaults.offsetY
-			d("reset to default!")
+		else
+			d('"/weaponchargealert" or "/wca"')
+			d("lock - locks position and hides the window")
+			d("unlock - unlocks position and shows the window")
 		end
 	end
 	if(not SLASH_COMMANDS["/wca"]) then
@@ -348,6 +309,11 @@ end
 
 local function WeaponChargeAlert_Initialized(self)
 	EVENT_MANAGER:RegisterForEvent("WeaponChargeAlert_OnLoad", EVENT_ADD_ON_LOADED, OnLoad)
+end
+
+function UnhideAllDur()
+	SetHiddenAll(MAIN_WEAPON, false)
+	SetHiddenAll(OFF_WEAPON, false)
 end
 
 WeaponChargeAlert_Initialized()
