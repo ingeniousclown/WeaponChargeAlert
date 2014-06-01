@@ -1,7 +1,7 @@
 ## Title: Weapon Charge Alert
 ## Author: ingeniousclown
-## Version: 1.1.0
-## APIVersion: 100003
+## Version: 1.1.1
+## APIVersion: 100004
 ## SavedVariables: WeaponChargeAlert_Settings
 ## OptionalDependsOn: LibAddonMenu-1.0
 
