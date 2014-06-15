@@ -1,7 +1,7 @@
 
 WeaponChargeAlertSettings = ZO_Object:Subclass()
 
-local LAM = LibStub("LibAddonMenu-1.0")
+local LAM = LibStub("LibAddonMenu-2.0")
 local settings = nil
 
 -----------------------------
@@ -138,104 +138,187 @@ function WeaponChargeAlertSettings:CreateOptionsMenu()
 	local firstMin = .02
 	local firstMax = .90
 
-	local panel = LAM:CreateControlPanel("WeaponChargeAlertSettingsPanel", "Weapon Charge Alert")
-	LAM:AddHeader(panel, "WeaponChargeAlert_Header", "General Options")
+	local panel = {
+		type = "panel",
+		name = "Weapon Charge Alert",
+		author = "ingeniousclown",
+		version = "1.1.2",
+		slashCommand = "/researchassistant",
+		registerForRefresh = true
+	}
 
-	LAM:AddCheckbox(panel, "WeaponChargeAlert_Lock_Toggle", str.LOCK_LABEL, str.LOCK_TOOLTIP,
-					function() return settings.locked end,
-					function(value)
+	local optionsData = {
+		[1] = {
+			type = "header",
+			name = "General Options"
+		},
+		
+		[2] = {
+			type = "checkbox",
+			name = str.LOCK_LABEL,
+			tooltip = str.LOCK_TOOLTIP,
+			getFunc = function() return settings.locked end,
+			setFunc = function(value)
 						self:SetLocked(value)
-					end)
-	LAM:AddSlider(panel, "WeaponChargeAlert_Alpha_Slider", str.ALPHA_LABEL, str.ALPHA_TOOLTIP,
-					5, 100, 1,
-					function() return settings.alpha * 100 end,
-					function(value)
+					end
+		},
+		
+		[3] = {
+			type = "slider",
+			name = str.ALPHA_LABEL,
+			tooltip = str.ALPHA_TOOLTIP,
+			min = 5,
+			max = 100,
+			step = 1,
+			getFunc = function() return settings.alpha * 100 end,
+			setFunc = function(value)
 						settings.alpha = value / 100
 						self.WCAControl:SetAlpha(value / 100)
-					end)
-	LAM:AddSlider(panel, "WeaponChargeAlert_Scale_Slider", str.SCALE_LABEL, str.SCALE_TOOLTIP,
-					25, 200, 5,
-					function() return settings.scale * 100 end,
-					function(value)
+					end
+		},
+		
+		[4] = {
+			type = "slider",
+			name = str.SCALE_LABEL,
+			tooltip = str.SCALE_TOOLTIP,
+			min = 25,
+			max = 200,
+			step = 5,
+			getFunc = function() return settings.scale * 100 end,
+			setFunc = function(value)
 						settings.scale = value / 100
 						self.WCAControl:SetScale(value / 100)
-					end)
-
-	local firstSlider = nil
-	local lowSlider = nil
-
-	LAM:AddHeader(panel, "WeaponChargeAlert_Alerts_Header", "Alert Options")
-	LAM:AddCheckbox(panel, "WeaponChargeAlert_First_Toggle", str.FIRST_TOGGLE_LABEL, str.FIRST_TOGGLE_TOOLTIP,
-					function() return settings.firstAlert end,
-					function(value)
+					end
+		},
+		
+		[5] = {
+			type = "header",
+			name = "Alert Options"
+		},
+		
+		[6] = {
+			type = "checkbox",
+			name = str.FIRST_TOGGLE_LABEL,
+			tooltip = str.FIRST_TOGGLE_TOOLTIP,
+			getFunc = function() return settings.firstAlert end,
+			setFunc = function(value)
 						settings.firstAlert = value
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
-	firstSlider = LAM:AddSlider(panel, "WeaponChargeAlert_First_Slider", str.FIRST_SLIDER_LABEL, str.FIRST_SLIDER_TOOLTIP,
-					firstMin * 100, firstMax * 100, 1,
-					function() return settings.firstThreshold * 100 end,
-					function(value)
+					end
+		},
+		
+		[7] = {
+			type = "slider",
+			name = str.FIRST_SLIDER_LABEL,
+			tooltip = str.FIRST_SLIDER_TOOLTIP,
+			min = firstMin * 100,
+			max = firstMax * 100,
+			step = 1,
+			getFunc = function() return settings.firstThreshold * 100 end,
+			setFunc = function(value)
 						settings.firstThreshold = value / 100
 						WeaponChargeAlert_UpdateAllAlerts()
 						if(settings.lowThreshold >= settings.firstThreshold) then
 							settings.lowThreshold = settings.firstThreshold - 0.01
-							local ls = lowSlider:GetNamedChild("Slider")
-							ls:SetValue((settings.lowThreshold - lowMin) / (lowMax - lowMin))
+							local ls = WeaponChargeAlert_Low_Slider["slidervalue"]
+							ls:SetText((settings.lowThreshold - lowMin) / (lowMax - lowMin))
 						end
-					end)
-	LAM:AddColorPicker(panel, "WeaponChargeAlert_First_Color_Picker", str.FIRST_COLOR_LABEL, str.FIRST_COLOR_TOOLTIP,
-					function()
+					end,
+			reference = "WeaponChargeAlert_First_Slider",
+			disabled = function() return not settings.firstAlert end
+		},
+		
+		[8] = {
+			type = "colorpicker",
+			name = str.FIRST_COLOR_LABEL,
+			tooltip = str.FIRST_COLOR_TOOLTIP,
+			getFunc = function()
 						local r, g, b, a = HexToRGBA(settings.firstColor)
 						return r, g, b
 					end,
-					function(r, g, b)
+			setFunc = function(r, g, b)
 						settings.firstColor = RGBAToHex(r, g, b, 1)
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
-
-	LAM:AddCheckbox(panel, "WeaponChargeAlert_Low_Toggle", str.LOW_TOGGLE_LABEL, str.LOW_TOGGLE_TOOLTIP,
-					function() return settings.lowAlert end,
-					function(value)
+					end,
+			disabled = function() return not settings.firstAlert end
+		},
+		
+		[9] = {
+			type = "checkbox",
+			name = str.LOW_TOGGLE_LABEL,
+			tooltip = str.LOW_TOGGLE_TOOLTIP,
+			getFunc = function() return settings.lowAlert end,
+			setFunc = function(value)
 						settings.lowAlert = value
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
-	lowSlider = LAM:AddSlider(panel, "WeaponChargeAlert_Low_Slider", str.LOW_SLIDER_LABEL, str.LOW_SLIDER_TOOLTIP,
-					lowMin * 100, lowMax * 100, 1,
-					function() return settings.lowThreshold * 100 end,
-					function(value)
+					end
+		},
+		
+		[10] = {
+			type = "slider",
+			name = str.LOW_SLIDER_LABEL,
+			tooltip = str.LOW_SLIDER_TOOLTIP,
+			min = lowMin * 100,
+			max = lowMax * 100, 
+			step = 1,
+			getFunc = function() return settings.lowThreshold * 100 end,
+			setFunc = function(value)
 						settings.lowThreshold = value / 100
 						WeaponChargeAlert_UpdateAllAlerts()
 						if(settings.lowThreshold >= settings.firstThreshold) then
 							settings.firstThreshold = settings.lowThreshold + 0.01
-							local fs = firstSlider:GetNamedChild("Slider")
-							fs:SetValue((settings.firstThreshold - firstMin) / (firstMax - firstMin))
+							local fs = WeaponChargeAlert_First_Slider["slidervalue"]
+							fs:SetText((settings.firstThreshold - firstMin) / (firstMax - firstMin))
 						end
-					end)
-	LAM:AddColorPicker(panel, "WeaponChargeAlert_Low_Color_Picker", str.LOW_COLOR_LABEL, str.LOW_COLOR_TOOLTIP,
-					function()
+					end,
+			reference = "WeaponChargeAlert_Low_Slider",
+			disabled = function() return not settings.lowAlert end
+		},
+		
+		[11] = {
+			type = "colorpicker",
+			name = str.LOW_COLOR_LABEL,
+			tooltip = str.LOW_COLOR_TOOLTIP,
+			getFunc = function()
 						local r, g, b, a = HexToRGBA(settings.lowColor)
 						return r, g, b
 					end,
-					function(r, g, b)
+			setFunc = function(r, g, b)
 						settings.lowColor = RGBAToHex(r, g, b, 1)
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
-
-	LAM:AddCheckbox(panel, "WeaponChargeAlert_Empty_Toggle", str.EMPTY_TOGGLE_LABEL, str.EMPTY_TOGGLE_TOOLTIP,
-					function() return settings.emptyAlert end,
-					function(value)
+					end,
+			disabled = function() return not settings.lowAlert end
+		},
+		
+		[12] = {
+			type = "checkbox",
+			name = str.EMPTY_TOGGLE_LABEL,
+			tooltip = str.EMPTY_TOGGLE_TOOLTIP,
+			getFunc = function() return settings.emptyAlert end,
+			setFunc = function(value)
 						settings.emptyAlert = value
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
-	LAM:AddColorPicker(panel, "WeaponChargeAlert_Empty_Color_Picker", str.EMPTY_COLOR_LABEL, str.EMPTY_COLOR_TOOLTIP,
-					function()
+					end
+		},
+		
+		[13] = {
+			type = "colorpicker",
+			name = str.EMPTY_COLOR_LABEL,
+			tooltip = str.EMPTY_COLOR_TOOLTIP,
+			getFunc = function()
 						local r, g, b, a = HexToRGBA(settings.emptyColor)
 						return r, g, b
 					end,
-					function(r, g, b)
+			setFunc = function(r, g, b)
 						settings.emptyColor = RGBAToHex(r, g, b, 1)
 						WeaponChargeAlert_UpdateAllAlerts()
-					end)
+					end,
+			disabled = function() return not settings.emptyAlert end
+		}
+	}
+
+	LAM:RegisterAddonPanel("WeaponChargeAlertSettingsPanel", panel)
+	LAM:RegisterOptionControls("WeaponChargeAlertSettingsPanel", optionsData)
 end
 
 function WeaponChargeAlertSettings:GetLanguage()
